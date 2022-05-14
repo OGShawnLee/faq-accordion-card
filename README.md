@@ -13,18 +13,14 @@ This is a solution to the [FAQ accordion card challenge on Frontend Mentor](http
   - [My process](#my-process)
     - [Built with](#built-with)
     - [What I learned](#what-i-learned)
-    - [Continued development](#continued-development)
     - [Useful resources](#useful-resources)
   - [Author](#author)
-  - [Acknowledgments](#acknowledgments)
-
-**Note: Delete this note and update the table of contents based on what sections you keep.**
 
 ## Overview
 
 ### The challenge
 
-Users should be able to:
+Users should be able to
 
 - View the optimal layout for the component depending on their device's screen size
 - See hover states for all interactive elements on the page
@@ -32,85 +28,234 @@ Users should be able to:
 
 ### Screenshot
 
-![](./screenshot.jpg)
-
-Add a screenshot of your solution. The easiest way to do this is to use Firefox to view your project, right-click the page and select "Take a Screenshot". You can choose either a full-height screenshot or a cropped one based on how long the page is. If it's very long, it might be best to crop it.
-
-Alternatively, you can use a tool like [FireShot](https://getfireshot.com/) to take the screenshot. FireShot has a free option, so you don't need to purchase it.
-
-Then crop/optimize/edit your image however you like, add it to your project, and update the file path in the image above.
-
-**Note: Delete this note and the paragraphs above when you add your screenshot. If you prefer not to add a screenshot, feel free to remove this entire section.**
+![Desktop View](./screenshots/Screenshot%202022-05-14%20at%2009-14-37%20Frontend%20Mentor%20FAQ%20Accordion%20Card.png)
 
 ### Links
 
-- Solution URL: [Add solution URL here](https://your-solution-url.com)
-- Live Site URL: [Add live site URL here](https://your-live-site-url.com)
+- Solution URL: [To be added](https://your-solution-url.com)
+- Live Site URL: [Deployed on Vercel](https://faq-accordion-card-eta-orpin.vercel.app/)
 
 ## My process
 
 ### Built with
 
 - Semantic HTML5 markup
-- CSS custom properties
-- Flexbox
-- CSS Grid
-- Mobile-first workflow
-- [React](https://reactjs.org/) - JS library
-- [Next.js](https://nextjs.org/) - React framework
-- [Styled Components](https://styled-components.com/) - For styles
-
-**Note: These are just examples. Delete this note and replace the list above with your own choices**
+- WindiCSS + Flexbox
+- [Malachite UI](https://github.com/OGShawnLee/malachite-ui) - Component Library
+- Svelte + Transition API
+- Vite
 
 ### What I learned
 
-Use this section to recap over some of your major learnings while working through this project. Writing these out and providing code samples of areas you want to highlight is a great way to reinforce your own knowledge.
-
-To see how you can add code snippets, see below:
+For this project I had to **build the Accordion component from the ground up for Malachite UI** so that I could just install, import, style and chill knowing that I won't worry about accessibility nor functionality since it is all handled for me, and on top of that animations are handled by Svelte... ahhh what a time to be alive.
 
 ```html
-<h1>Some HTML code I'm proud of</h1>
+<Accordion class="flex flex-col gap-3">
+  {#each questions as { question, answer }, index}
+    <AccordionItem let:isOpen let:header let:panel open={index === 1}>
+      <h2 use:header class="h-12">
+        <AccordionButton
+          class={{
+            base: 'w-full py-2 px-0 | button-reset border-b-blue-50 outline-none transition duration-150 ease-in',
+            open: { on: 'font-bold focus:text-soft-violet', off: 'focus:text-soft-red' },
+          }}>
+          <span class="flex items-center justify-between">
+            <span class="text-[13.5px] sm:text-base md:text-lg">
+              {question}
+            </span>
+            <img
+              class="transform duration-150 ease-in"
+              class:rotate-180={isOpen}
+              src={iconArrow}
+              alt="" />
+          </span>
+        </AccordionButton>
+      </h2>
+      <div slot="panel" use:panel transition:slide={{ duration: 175, easing: quadOut }}>
+        <p class="text-xs sm:text-sm md:text-base">{answer}</p>
+      </div>
+    </AccordionItem>
+  {/each}
+</Accordion>
 ```
 
-```css
-.proud-of-this-css {
-  color: papayawhip;
+```ts
+export default class Accordion extends Component {
+  protected readonly Buttons: Ordered<ItemInstance & Nav.Member>;
+  protected readonly Navigable: Navigable<ItemInstance>;
+
+  readonly Open: Readable<boolean>;
+  protected readonly Items = new Hashable<number, Toggleable>();
+  readonly Finite: Store<Readable<boolean>>;
+  readonly ShouldOrder: Store<Readable<boolean>>;
+
+  protected isInitialised = false;
+  protected previousOpenItem: ItemInstance | undefined;
+
+  constructor({ Finite, ShouldOrder }: Expand<Options>) {
+    super({ component: 'accordion', index: Accordion.generateIndex() });
+
+    this.Finite = Finite;
+    this.ShouldOrder = ShouldOrder;
+
+    this.Buttons = new Ordered(ShouldOrder);
+    this.Navigable = new Navigable({ Ordered: this.Buttons, Finite, Vertical: true });
+
+    this.Open = derived(this.Buttons.Members, (items) => {
+      return items.some(({ isOpen }) => isOpen);
+    });
+
+    Context.setContext({
+      accordion: this.accordion,
+      initItem: this.initItem.bind(this),
+    });
+  }
+
+  get accordion() {
+    return this.defineActionComponent({
+      onMount: this.name,
+      destroy: ({ element }) => [
+        this.Navigable.initNavigation(element, {
+          handler() {
+            return Navigable.initNavigationHandler(element, ({ event, code, ctrlKey }) => {
+              if (!this.isWithin(document.activeElement)) return;
+              switch (code) {
+                case 'ArrowDown':
+                  event.preventDefault();
+                  return this.handleNextKey(code, ctrlKey);
+                case 'ArrowUp':
+                  event.preventDefault();
+                  return this.handleBackKey(code, ctrlKey);
+                case 'End':
+                  return this.goLast();
+                case 'Home':
+                  return this.goFirst();
+              }
+            });
+          },
+        }),
+      ],
+    });
+  }
+
+  protected handleAriaLevel(header: HTMLElement, level: string | number | undefined) {
+    if (isNumber(level) || isString(level)) return (header.ariaLevel = level.toString());
+    const [h, number] = header.tagName;
+    if (header.tagName.length === 2 && h === 'H' && isNumber(Number(number))) {
+      header.ariaLevel = number;
+    } else header.ariaLevel = '2';
+  }
+
+  protected handleButtonFocus(button: HTMLElement) {
+    return useListener(button, 'focus', async () => {
+      await tick();
+      const index = this.Navigable.indexOf(button);
+      if (index < 0 || this.Navigable.isSelected(index)) return;
+      this.Navigable.set(index);
+    });
+  }
+
+  protected handleUnique(button: HTMLElement, Toggleable: Toggleable) {
+    return Toggleable.subscribe((isOpen) => {
+      if (!isOpen) return;
+      const item = this.Buttons.get(button);
+      if (button !== this.previousOpenItem?.button) this.previousOpenItem?.close();
+      this.previousOpenItem = item;
+    });
+  }
+
+  initItem({ Toggleable, initialOpen }: { Toggleable: Toggleable; initialOpen: boolean }) {
+    const { destroy, index } = this.Items.push(Toggleable);
+    onDestroy(() => destroy());
+
+    if (initialOpen && !this.isInitialised) {
+      this.isInitialised = true;
+      Toggleable.open();
+    }
+
+    const [Button, Header, Panel] = generate(3, () => new Bridge());
+    const { nameChild } = useName({ parent: this.name, component: 'item', index });
+
+    return ItemContext.setContext({
+      Open: makeReadable(Toggleable),
+      close: Toggleable.close.bind(Toggleable),
+      button: defineActionComponent({
+        Bridge: Button,
+        onMount: ({ element }) => {
+          setAttribute(element, ['tabIndex', '0'], {
+            overwrite: true,
+            predicate: () => element.tabIndex <= 0,
+          });
+          return nameChild('button');
+        },
+        destroy: ({ element }) => [
+          Toggleable.button(element, {
+            onChange: (isOpen) => {
+              element.ariaExpanded = String(isOpen);
+            },
+          }),
+          this.Navigable.initItem(element, {
+            Bridge: Button,
+            Value: {
+              Index: writable(this.Buttons.size),
+              button: element,
+              close: () => Toggleable.set(false),
+              isOpen: Toggleable.isOpen,
+            },
+          }),
+          this.handleUnique(element, Toggleable),
+          this.handleButtonFocus(element),
+          Panel.Name.subscribe((id) => {
+            if (id) element.setAttribute('aria-controls', id);
+            else element.removeAttribute('aria-controls');
+          }),
+          usePair(Button.Disabled, Panel).subscribe(([isDisabled, panel]) => {
+            if (isDisabled && panel) element.ariaDisabled = 'true';
+            else element.ariaDisabled = null;
+          }),
+        ],
+      }),
+      header: defineActionComponentWithParams<number | string>({
+        Bridge: Header,
+        onMount: ({ element, parameter: level }) => {
+          this.handleAriaLevel(element, level);
+          element.setAttribute('role', 'heading');
+          return nameChild('header');
+        },
+        onUpdate: ({ element, parameter: level }) => {
+          this.handleAriaLevel(element, level);
+        },
+      }),
+      panel: defineActionComponent({
+        Bridge: Panel,
+        onMount: () => {
+          return nameChild('panel');
+        },
+        destroy: ({ element }) => [
+          Toggleable.panel(element, {
+            plugins: [usePreventInternalFocus],
+          }),
+          Button.Name.subscribe((id) => {
+            if (id) element.setAttribute('aria-labelledby', id);
+            else element.removeAttribute('aria-labelledby');
+          }),
+          this.Items.Size.subscribe((size) => {
+            if (size <= 6) element.setAttribute('role', 'region');
+            else element.removeAttribute('role');
+          }),
+        ],
+      }),
+    });
+  }
+
+  private static generateIndex = this.initIndexGenerator();
 }
 ```
 
-```js
-const proudOfThisFunc = () => {
-  console.log('🎉');
-};
-```
-
-If you want more help with writing markdown, we'd recommend checking out [The Markdown Guide](https://www.markdownguide.org/) to learn more.
-
-**Note: Delete this note and the content within this section and replace with your own learnings.**
-
-### Continued development
-
-Use this section to outline areas that you want to continue focusing on in future projects. These could be concepts you're still not completely comfortable with or techniques you found useful that you want to refine and perfect.
-
-**Note: Delete this note and the content within this section and replace with your own plans for continued development.**
-
 ### Useful resources
 
-- [Example resource 1](https://www.example.com) - This helped me for XYZ reason. I really liked this pattern and will use it going forward.
-- [Example resource 2](https://www.example.com) - This is an amazing article which helped me finally understand XYZ. I'd recommend it to anyone still learning this concept.
-
-**Note: Delete this note and replace the list above with resources that helped you during the challenge. These could come in handy for anyone viewing your solution or for yourself when you look back on this project in the future.**
+- [WAI-ARIA Authoring Practices 1.1](https://www.w3.org/TR/wai-aria-practices-1.1/#accordion) - I followed this awesome pattern for the Accordion.
 
 ## Author
 
-- Website - [Add your name here](https://www.your-site.com)
-- Frontend Mentor - [@yourusername](https://www.frontendmentor.io/profile/yourusername)
-- Twitter - [@yourusername](https://www.twitter.com/yourusername)
-
-**Note: Delete this note and add/remove/edit lines above based on what links you'd like to share.**
-
-## Acknowledgments
-
-This is where you can give a hat tip to anyone who helped you out on this project. Perhaps you worked in a team or got some inspiration from someone else's solution. This is the perfect place to give them some credit.
-
-**Note: Delete this note and edit this section's content as necessary. If you completed this challenge by yourself, feel free to delete this section entirely.**
+- Frontend Mentor - [@Shawn Lee](https://www.frontendmentor.io/profile/OGShawnLee)
